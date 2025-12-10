@@ -2,11 +2,16 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
+    PROJECT_NAME: str = "WalletFlow API"
+    
+    PAYSTACK_INITIALIZE_URL: str
+    PAYSTACK_VERIFY_URL: str
+    
     DATABASE_URL: str
     
-    SECRET_KEY: str
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str 
+    ACCESS_TOKEN_EXPIRE_MINUTES: int 
     
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
@@ -16,8 +21,8 @@ class Settings(BaseSettings):
     PAYSTACK_PUBLIC_KEY: str
     PAYSTACK_WEBHOOK_SECRET: str
     
-    API_KEY_PREFIX: str = "sk_live_"
-    MAX_API_KEYS_PER_USER: int = 5
+    API_KEY_PREFIX: str
+    MAX_API_KEYS_PER_USER: int 
     
     class Config:
         env_file = ".env"
