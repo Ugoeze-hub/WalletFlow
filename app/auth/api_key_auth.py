@@ -35,7 +35,7 @@ def parse_expiry(expiry_str: str) -> datetime:
 
 def create_api_key(
     db: Session,
-    user_id: int,
+    user_id: str,
     name: str,
     permissions: list,
     expiry_str: str
@@ -54,10 +54,9 @@ def create_api_key(
     expires_at = parse_expiry(expiry_str)
     
     api_key = APIKey(
-        id=secrets.token_urlsafe(16),
         user_id=user_id,
         name=name,
-        key=hash_api_key(api_key),
+        key=hash_api_key(key),
         permissions=json.dumps(permissions),
         expires_at=expires_at,
         is_active=True

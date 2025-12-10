@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 import jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, APIKeyHeader
 from app.config import settings
 from app.database import get_db
 from sqlalchemy.orm import Session
@@ -17,7 +17,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer(auto_error=False)
+api_key_scheme = APIKeyHeader(
+    name="x-api-key", 
+    auto_error=False,
+    description="API Key for service authentication. Format: sk_test_xxx or sk_live_xxx"
+)
+
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    description="JWT token from Google OAuth. Format: Bearer eyJ0eXAiOiJKV1Qi..."
+)
 
 def create_access_token(user_id: str, user_email: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -56,29 +65,44 @@ def verify_token(token: str):
     
 
 async def get_current_user_or_api_key(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    api_key: Optional[str] = Depends(api_key_scheme),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db)
 ) -> Tuple[str, list]:
-    
-    headers = dict(request.headers) if request else {}
-    logger.info(f"Headers: {headers}")
-    
-    if request:
-        api_key = request.headers.get("x-api-key")
-    
-        if api_key:
-            logger.info("API key found in headers, attempting API key authentication")
-            return await _authenticate_by_api_key(api_key, db)
+    """
+        Unified authentication for API Key OR JWT
         
+        This function appears in FastAPI docs with TWO authentication methods.
+        
+        Click "Authorize" button in Swagger UI to test!
+        
+        Returns: (user_id: str, permissions: list)
+    """
     if credentials and credentials.credentials:
+        token = credentials.credentials
+        
+        if token.startswith("sk_test_") or token.startswith("sk_live_"):
+            logger.info(f"Detected API key in JWT field (Swagger bug): {token[:15]}...")
+            return await _authenticate_by_api_key(token, db)
+        
+        logger.info(f"Processing as JWT: {token[:20]}...")
+        return await _authenticate_by_jwt(token, db)
+    
+    elif api_key:
+        logger.info(f"Attempting API Key authentication: {api_key[:15]}...")
+        return await _authenticate_by_api_key(api_key, db)
+    
+    elif credentials and credentials.credentials:
+        token = credentials.credentials
         logger.info("Bearer token found in headers, attempting JWT authentication")
-        return await _authenticate_by_jwt(credentials.credentials, db)
+        return await _authenticate_by_jwt(token, db)
     
     logger.warning("No authentication credentials provided")
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="Authentication required. Use either:\n"
+               "1. API Key: Header 'x-api-key: your_key_here'\n"
+               "2. JWT: Header 'Authorization: Bearer your_token_here'",
         headers={"WWW-Authenticate": "Bearer"}
     )
         
@@ -86,28 +110,31 @@ async def get_current_user_or_api_key(
 async def _authenticate_by_api_key(api_key: str, db: Session) -> Tuple[str, list]:
     """Authenticate using API Key"""
     try:
+        hashed_provided_key = hash_api_key(api_key)  
+        logger.info(f"Hashed provided key: {hashed_provided_key[:50]}...")
+        
         active_keys = db.query(APIKey).filter(
-            APIKey.key == api_key,
-            APIKey.is_active == True
+            APIKey.is_active == True,
+            APIKey.expires_at > datetime.now(timezone.utc)
         ).all()
         
         logger.info(f"Active API key query result: {len(active_keys) if active_keys else 0}")
             
         for key_obj in active_keys:
-            if pwd_context.verify(api_key, key_obj.key):  
+            if hashed_provided_key == key_obj.key:
                 logger.info(f"API key authenticated for user_id: {key_obj.user_id}")
-            
-            user = db.query(User).filter(User.id == key_obj.user_id).first()
-            if user:
                 
-                permissions = []
-                try:
-                    if key_obj.permissions:
-                        permissions = json.loads(key_obj.permissions)
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to decode permissions for API key {key_obj.id}")
-                
-            return user.id, permissions
+                user = db.query(User).filter(User.id == key_obj.user_id).first()
+                if user:
+                    
+                    permissions = []
+                    try:
+                        if key_obj.permissions:
+                            permissions = json.loads(key_obj.permissions)
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to decode permissions for API key {key_obj.id}")
+                    
+                return user.id, permissions
         
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

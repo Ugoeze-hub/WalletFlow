@@ -1,14 +1,8 @@
-from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Boolean, func
+from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean, func, JSON
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-import enum
 from app.database import Base
 from sqlalchemy.orm import relationship
-
-class PermissionType(str, enum.Enum):
-    DEPOSIT = "deposit"
-    TRANSFER = "transfer"
-    READ = "read"
 
 
 class APIKey(Base):
@@ -18,7 +12,7 @@ class APIKey(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
     key = Column(String, unique=True, index=True, nullable=False)
-    permissions = Column(Enum(PermissionType), nullable=False)  
+    permissions = Column(JSON, nullable=False)  
     is_active = Column(Boolean, default=True)
     expires_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
