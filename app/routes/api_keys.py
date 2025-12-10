@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.schemas.api_key import APIKeyCreate, APIKeyResponse, APIKeyRollover
-import app.schemas.api_key as schemas
 from app.auth.jwt_auth import get_current_user
 from app.auth.api_key_auth import create_api_key, rollover_api_key
 from app.database import get_db
@@ -27,9 +26,9 @@ async def create_api_key_endpoint(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/rollover", response_model=schemas.APIKeyResponse)
+@router.post("/rollover", response_model=APIKeyResponse)
 async def rollover_api_key_endpoint(
-    rollover_data: schemas.APIKeyRollover,
+    rollover_data: APIKeyRollover,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

@@ -7,16 +7,31 @@ from app.auth.api_key_auth import generate_id
 from app.models.wallet import Wallet
 from app.models.transactions import TransactionType, TransactionStatus, Transaction
 from app.models.user import User
-from app.schemas.wallet import DepositStatusResponse, DepositResponse, DepositRequest, WalletResponse, BalanceResponse, TransferRequest, TransferResponse, TransactionResponse
+from app.schemas.wallet import (
+    DepositStatusResponse, 
+    DepositResponse, 
+    DepositRequest,
+    WalletResponse, 
+    BalanceResponse, 
+    TransferRequest, 
+    TransferResponse, 
+    TransactionResponse,
+    PaystackResponse
+)
+    
 from app.services.paystack import paystack
 from app.database import get_db
 from app.services.webhooks import verify_paystack_signature
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
 
 @router.post("/deposit", response_model=DepositResponse)
 async def deposit(
     deposit_data: DepositRequest,
+    request: Request,
     auth: tuple = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db)
 ):
@@ -43,20 +58,24 @@ async def deposit(
     transaction = Transaction(
         user_id=user_id,
         wallet_id=wallet.id,
-        reference=reference,
         amount=deposit_data.amount,
         transaction_type=TransactionType.DEPOSIT,
         status=TransactionStatus.PENDING,
-        transaction_data=json.dumps({"authorization_url": result["authorization_url"]})
+        reference=reference,
+        transaction_data=json.dumps({
+            "authorization_url": result["authorization_url"],
+            "provider": "paystack"
+            })
     )
     
     db.add(transaction)
     db.commit()
     
-    return {
-        "reference": reference,
-        "authorization_url": result["authorization_url"]
-    }
+    return DepositResponse(
+        reference=reference,
+        authorization_url=result["authorization_url"],
+        message=f"Deposit of {transaction.amount} successfull"
+    )
 
 @router.post("/paystack/webhook")
 async def paystack_webhook(
@@ -66,12 +85,15 @@ async def paystack_webhook(
     """Handle Paystack webhook notifications"""
     body = await request.body()
     signature = request.headers.get("x-paystack-signature")
+    logger.info("Received Paystack webhook")
     
     if not verify_paystack_signature(body, signature):
+        logger.error("Invalid Paystack webhook signature")
         raise HTTPException(status_code=401, detail="Invalid signature")
     
     data = await request.json()
     event = data.get("event")
+    logger.info(f"Processing Paystack event: {event}")
     
     if event == "charge.success":
         reference = data["data"]["reference"]
@@ -82,7 +104,10 @@ async def paystack_webhook(
         ).first()
         
         if not transaction:
-            raise HTTPException(status_code=404, detail="Transaction not found")
+            raise HTTPException(
+                status_code=404,
+                detail="Transaction not found"
+                )
         
         if transaction.status == TransactionStatus.SUCCESS:
             return {"status": True}
@@ -95,15 +120,21 @@ async def paystack_webhook(
         ).first()
         
         if wallet:
-            wallet.balance += transaction.amount
+            wallet.balance += amount
+            logger.info(f"Wallet {wallet.wallet_number} credited with {amount}")
         
         db.commit()
+        logger.info(f"Transaction {reference} marked as SUCCESS")
     
-    return {"status": True}
+    return PaystackResponse(
+        status="success",
+        message="Webhook processed"
+    )
 
 @router.get("/deposit/{reference}/status", response_model=DepositStatusResponse)
 async def check_deposit_status(
     reference: str,
+    request: Request,
     auth: tuple = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db)
 ):
@@ -127,6 +158,7 @@ async def check_deposit_status(
 
 @router.get("/balance", response_model=WalletResponse)
 async def get_balance(
+    request: Request,
     auth: tuple = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db)
 ):
@@ -139,11 +171,15 @@ async def get_balance(
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
     
-    return BalanceResponse(balance=wallet.balance)
+    return WalletResponse(
+        wallet_number=wallet.wallet_number,
+        balance=wallet.balance
+       )
 
 @router.post("/transfer", response_model=TransferResponse)
 async def transfer(
     transfer_data: TransferRequest,
+    request: Request,
     auth: tuple = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db)
 ):
@@ -155,6 +191,9 @@ async def transfer(
     sender_wallet = db.query(Wallet).filter(Wallet.user_id == user_id).first()
     if not sender_wallet:
         raise HTTPException(status_code=404, detail="Sender wallet not found")
+    
+    if transfer_data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
     
     if sender_wallet.balance < transfer_data.amount:
         raise HTTPException(status_code=400, detail="Insufficient balance")
@@ -177,25 +216,35 @@ async def transfer(
         
         sender_transaction = Transaction(
             user_id=user.id,
-            reference=str(uuid.uuid4()),
+            wallet_id=sender_wallet.id,
+            sender_wallet_id=sender_wallet.id,
+            recipient_wallet_id=recipient_wallet.id,
             amount=transfer_data.amount,
             transaction_type=TransactionType.TRANSFER,
-            status=TransactionStatus.SUCCESS,
+            status=TransactionStatus.SUCCESS,            
+            reference=str(uuid.uuid4()),
+            description=f"Transfer to {recipient_wallet.wallet_number}",
             transaction_data=json.dumps({
                 "recipient_wallet": transfer_data.wallet_number,
-                "type": "outgoing"
+                "type": "outgoing",
+                "recipient_user_id": str(recipient_wallet.user_id)
             })
         )
         
         recipient_transaction =Transaction(
             user_id=recipient_wallet.user_id,
-            reference=generate_id(),
+            wallet_id=recipient_wallet.id,
+            sender_wallet_id=sender_wallet.id,
+            recipient_wallet_id=recipient_wallet.id,
             amount=transfer_data.amount,
             transaction_type=TransactionType.TRANSFER,
             status=TransactionStatus.SUCCESS,
+            reference=generate_id(),
+            description=f"Transfer from {sender_wallet.wallet_number}",
             transaction_data=json.dumps({
                 "sender_wallet": sender_wallet.wallet_number,
-                "type": "incoming"
+                "type": "incoming",
+                "sender_user_id": str(sender_wallet.user_id)
             })
         )
         
@@ -203,17 +252,19 @@ async def transfer(
         db.add(recipient_transaction)
         db.commit()
         
+        return TransferResponse(
+            status="success",
+            message="Transfer completed"
+        )
+        
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Transfer failed: {str(e)}")
     
-    return {
-        "status": "success",
-        "message": "Transfer completed"
-    }
 
 @router.get("/transactions", response_model=list[TransactionResponse])
 async def get_transactions(
+    request: Request,
     auth: tuple = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db)
 ):
@@ -227,4 +278,13 @@ async def get_transactions(
         Transaction.user_id == user.id
     ).order_by(Transaction.created_at.desc()).all()
     
-    return transactions
+    return [
+            TransactionResponse(
+            type=transaction.transaction_type.value,
+            amount=transaction.amount,
+            status=transaction.status.value,
+            reference=transaction.reference,
+            created_at=transaction.created_at,
+            description=transaction.description
+            ) for transaction in transactions
+            ]

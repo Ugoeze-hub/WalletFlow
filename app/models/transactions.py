@@ -27,6 +27,7 @@ class Transaction(Base):
     transaction_type = Column(Enum(TransactionType), nullable=False)
     status = Column(Enum(TransactionStatus), default=TransactionStatus.PENDING, nullable=False)
     recipient_wallet_id = Column(UUID(as_uuid=True), ForeignKey('wallets.id'), nullable=True)
+    sender_wallet_id = Column(UUID(as_uuid=True), ForeignKey('wallets.id'), nullable=True)
     description = Column(Text)
     reference = Column(String, unique=True, index=True, nullable=False)
     transaction_data = Column(Text, nullable=True)
@@ -34,5 +35,6 @@ class Transaction(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     user = relationship("User", back_populates="transactions")
-    wallet = relationship("Wallet", back_populates="sent_transactions", foreign_keys=[wallet_id])
+    wallet = relationship("Wallet", back_populates="primary_transactions", foreign_keys=[wallet_id])
     recipient_wallet = relationship("Wallet", back_populates="received_transactions", foreign_keys=[recipient_wallet_id])
+    sender_wallet = relationship("Wallet", back_populates="sent_transactions",  foreign_keys=[sender_wallet_id])

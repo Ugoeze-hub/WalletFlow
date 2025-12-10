@@ -21,6 +21,7 @@ class DepositRequest(BaseModel):
 class DepositResponse(BaseModel):
     reference: str
     authorization_url: str
+    message: str
 
 class TransferRequest(BaseModel):
     wallet_number: str
@@ -33,6 +34,10 @@ class TransferRequest(BaseModel):
         return v
 
 class TransferResponse(BaseModel):
+    status: str
+    message: str
+    
+class PaystackResponse(BaseModel):
     status: str
     message: str
 

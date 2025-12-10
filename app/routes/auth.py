@@ -120,11 +120,7 @@ async def google_callback(
         
         return Token(
             access_token=access_token,
-            token_type="bearer",
-            email=user.email,
-            name=user.name,
-            user_id=str(user.id),
-            message="Authentication successful"            
+            token_type="bearer"      
         )
 
     except HTTPException:
