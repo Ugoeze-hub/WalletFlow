@@ -1,16 +1,17 @@
 from pydantic import BaseModel, field_validator
+from decimal import Decimal
 from datetime import datetime
 from app.models.transactions import TransactionType, TransactionStatus
 
 class WalletResponse(BaseModel):
     wallet_number: str
-    balance: float
+    balance: Decimal
     
     class Config:
         from_attributes = True
 
 class DepositRequest(BaseModel):
-    amount: float
+    amount: Decimal
     
     @field_validator('amount')
     def amount_must_be_positive(cls, v):
@@ -25,7 +26,7 @@ class DepositResponse(BaseModel):
 
 class TransferRequest(BaseModel):
     wallet_number: str
-    amount: float
+    amount: Decimal
     
     @field_validator('amount')
     def amount_must_be_positive(cls, v):
@@ -44,14 +45,14 @@ class PaystackResponse(BaseModel):
 class DepositStatusResponse(BaseModel):
     reference: str
     status: str
-    amount: float
+    amount: Decimal
     
 class BalanceResponse(BaseModel):
-    balance: float
+    balance: Decimal
     
 class TransactionResponse(BaseModel):
     type: TransactionType
-    amount: float
+    amount: Decimal
     status: TransactionStatus
     reference: str
     created_at: datetime

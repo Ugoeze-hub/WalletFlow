@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from sqlalchemy.orm import Session
 import json
 import uuid
@@ -21,7 +21,6 @@ from app.schemas.wallet import (
     
 from app.services.paystack import paystack
 from app.database import get_db
-from app.services.webhooks import verify_paystack_signature
 import logging
 
 logger = logging.getLogger(__name__)
@@ -50,7 +49,8 @@ async def deposit(
         result = await paystack.initialize_transaction(
             email=db.query(User).filter(User.id == user_id).first().email,
             amount=deposit_data.amount,
-            reference=reference
+            reference=reference,
+            callback_url=str(request.url_for("paystack_webhook"))
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -83,53 +83,49 @@ async def paystack_webhook(
     db: Session = Depends(get_db)
 ):
     """Handle Paystack webhook notifications"""
+    
     body = await request.body()
     signature = request.headers.get("x-paystack-signature")
     logger.info("Received Paystack webhook")
     
-    if not verify_paystack_signature(body, signature):
-        logger.error("Invalid Paystack webhook signature")
-        raise HTTPException(status_code=401, detail="Invalid signature")
+    if not signature:
+        logger.error("Missing 'x-paystack-signature' header!")
+        for key, value in request.headers.items():
+            if "signature" in key.lower():
+                logger.info(f"Found signature-like header: {key} = {value[:20]}...")
     
-    data = await request.json()
+    logger.info(f"Signature value: {signature[:50] if signature else 'None'}")
+
+    
+    if not paystack.verify_paystack_signature(body, signature):
+        logger.error("Invalid Paystack webhook signature")
+        raise HTTPException(
+            status_code=401, 
+            detail="Invalid signature"
+        )
+    
+    try:
+        data = await request.json()
+    except Exception as e:
+        logger.error(f"Failed to parse webhook data: {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid JSON payload"
+        )
     event = data.get("event")
     logger.info(f"Processing Paystack event: {event}")
     
     if event == "charge.success":
-        reference = data["data"]["reference"]
-        amount = data["data"]["amount"] / 100
-        
-        transaction = db.query(Transaction).filter(
-            Transaction.reference == reference
-        ).first()
-        
-        if not transaction:
-            raise HTTPException(
-                status_code=404,
-                detail="Transaction not found"
-                )
-        
-        if transaction.status == TransactionStatus.SUCCESS:
-            return {"status": True}
-        
-        transaction.status = TransactionStatus.SUCCESS
-        transaction.transaction_data = json.dumps(data["data"])
-        
-        wallet = db.query(Wallet).filter(
-            Wallet.user_id == transaction.user_id
-        ).first()
-        
-        if wallet:
-            wallet.balance += amount
-            logger.info(f"Wallet {wallet.wallet_number} credited with {amount}")
-        
-        db.commit()
-        logger.info(f"Transaction {reference} marked as SUCCESS")
+        await paystack.handle_charge_success(data, db)
     
-    return PaystackResponse(
-        status="success",
-        message="Webhook processed"
-    )
+    elif event == "charge.failed":
+        await paystack.handle_charge_failed(data, db)
+        
+    else:
+        logger.info(f"Unhandled event type: {event}")
+    
+    return {"status": True}
+   
 
 @router.get("/deposit/{reference}/status", response_model=DepositStatusResponse)
 async def check_deposit_status(
