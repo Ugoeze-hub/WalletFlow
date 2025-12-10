@@ -19,8 +19,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting Wallet Service...")
     try:
-        Base.metadata.drop_all(bind=engine)
-        logger.info("Database tables dropped")
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created")
     except Exception as e:
