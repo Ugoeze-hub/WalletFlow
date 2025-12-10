@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
-from jwt import JWTError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -16,10 +15,11 @@ from app.auth.api_key_auth import hash_api_key
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-def create_access_token(user_id: str):
+def create_access_token(user_id: str, user_email: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     payload = {
+        "sub": user_email,
         "user_id": user_id,
         "exp": expire,
         "iat": datetime.now(timezone.utc)

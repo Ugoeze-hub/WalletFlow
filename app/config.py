@@ -4,9 +4,6 @@ from typing import Optional
 class Settings(BaseSettings):
     PROJECT_NAME: str = "WalletFlow API"
     
-    PAYSTACK_INITIALIZE_URL: str
-    PAYSTACK_VERIFY_URL: str
-    
     DATABASE_URL: str
     
     JWT_SECRET_KEY: str
@@ -19,7 +16,8 @@ class Settings(BaseSettings):
     
     PAYSTACK_SECRET_KEY: str
     PAYSTACK_PUBLIC_KEY: str
-    PAYSTACK_WEBHOOK_SECRET: str
+    PAYSTACK_INITIALIZE_URL: str
+    PAYSTACK_VERIFY_URL: str
     
     API_KEY_PREFIX: str
     MAX_API_KEYS_PER_USER: int 

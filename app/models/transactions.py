@@ -3,7 +3,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import datetime, timezone
 import enum
-from database import Base
+from app.database import Base
 from sqlalchemy.orm import relationship
 
 class TransactionStatus(str, enum.Enum):
@@ -29,10 +29,10 @@ class Transaction(Base):
     recipient_wallet_id = Column(UUID(as_uuid=True), ForeignKey('wallets.id'), nullable=True)
     description = Column(Text)
     reference = Column(String, unique=True, index=True, nullable=False)
-    metadata = Column(Text, nullable=True)
+    transaction_data = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     user = relationship("User", back_populates="transactions")
-    wallet = relationship("Wallet", back_populates="transactions", foreign_keys=[wallet_id])
-    recipient_wallet = relationship("Wallet", foreign_keys=[recipient_wallet_id])
+    wallet = relationship("Wallet", back_populates="sent_transactions", foreign_keys=[wallet_id])
+    recipient_wallet = relationship("Wallet", back_populates="received_transactions", foreign_keys=[recipient_wallet_id])

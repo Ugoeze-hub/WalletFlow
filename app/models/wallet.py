@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, DateTime, Float, ForeignKey, func
-from database import Base
+from app.database import Base
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -14,5 +14,7 @@ class Wallet(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="wallet")
-    transactions = relationship("Transaction", back_populates="wallet")
+    sent_transactions = relationship("Transaction", back_populates="wallet", foreign_keys="Transaction.wallet_id")
+    received_transactions = relationship("Transaction", back_populates="recipient_wallet", foreign_keys="Transaction.recipient_wallet_id"
+    )
     

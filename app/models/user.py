@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, DateTime, func
-from database import Base
+from app.database import Base
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -13,7 +13,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    wallet = relationship("Wallet", back_populates="owner", uselist=False)
+    wallet = relationship("Wallet", back_populates="user", uselist=False)
     transactions = relationship("Transaction", back_populates="user")
     api_keys = relationship("APIKey", back_populates="user")
     

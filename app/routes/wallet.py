@@ -47,7 +47,7 @@ async def deposit(
         amount=deposit_data.amount,
         transaction_type=TransactionType.DEPOSIT,
         status=TransactionStatus.PENDING,
-        metadata=json.dumps({"authorization_url": result["authorization_url"]})
+        transaction_data=json.dumps({"authorization_url": result["authorization_url"]})
     )
     
     db.add(transaction)
@@ -88,7 +88,7 @@ async def paystack_webhook(
             return {"status": True}
         
         transaction.status = TransactionStatus.SUCCESS
-        transaction.metadata = json.dumps(data["data"])
+        transaction.transaction_data = json.dumps(data["data"])
         
         wallet = db.query(Wallet).filter(
             Wallet.user_id == transaction.user_id
@@ -181,7 +181,7 @@ async def transfer(
             amount=transfer_data.amount,
             transaction_type=TransactionType.TRANSFER,
             status=TransactionStatus.SUCCESS,
-            metadata=json.dumps({
+            transaction_data=json.dumps({
                 "recipient_wallet": transfer_data.wallet_number,
                 "type": "outgoing"
             })
@@ -193,7 +193,7 @@ async def transfer(
             amount=transfer_data.amount,
             transaction_type=TransactionType.TRANSFER,
             status=TransactionStatus.SUCCESS,
-            metadata=json.dumps({
+            transaction_data=json.dumps({
                 "sender_wallet": sender_wallet.wallet_number,
                 "type": "incoming"
             })

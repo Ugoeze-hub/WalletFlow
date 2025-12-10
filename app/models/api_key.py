@@ -2,7 +2,7 @@ from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Boolean, func
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import enum
-from database import Base
+from app.database import Base
 from sqlalchemy.orm import relationship
 
 class PermissionType(str, enum.Enum):

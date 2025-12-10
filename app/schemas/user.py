@@ -1,21 +1,16 @@
-from pydantic import BaseModel, EmailStr
-from datetime import datetime
-from uuid import UUID
-
-class UserBase(BaseModel):
-    email: EmailStr
-    name: str | None = None
-
-class UserCreate(UserBase):
-    google_id: UUID
-
-class UserResponse(UserBase):
-    id: UUID
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True  
-
+from pydantic import BaseModel
+from typing import Optional
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    
+class TokenData(BaseModel):
+    email: Optional[str] = None
+    user_id: Optional[int] = None
+    
+class TokenResponse(Token):
+    user_id: str
+    email: str
+    name: Optional[str] = None
+    message: str = "Authentication successful"
+    

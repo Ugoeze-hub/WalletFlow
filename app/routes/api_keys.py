@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.schemas.api_key import APIKeyCreate, APIKeyResponse, APIKeyRollover
 import app.schemas.api_key as schemas
-from app.auth import get_current_user
+from app.auth.jwt_auth import get_current_user
 from app.auth.api_key_auth import create_api_key, rollover_api_key
 from app.database import get_db
 
