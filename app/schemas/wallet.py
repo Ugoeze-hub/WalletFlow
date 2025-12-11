@@ -58,7 +58,8 @@ class TransferRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "amount": 5000.00
+                "amount": 5000.00,
+                "wallet_number": "1234567890"
             }
         }
 
