@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 class Paystack:
     def __init__(self):
         self.secret_key = settings.PAYSTACK_SECRET_KEY
+        self.initialize_url = settings.PAYSTACK_INITIALIZE_URL
         self.headers = {
             "Authorization": f"Bearer {self.secret_key}",
             "Content-Type": "application/json"
@@ -46,8 +47,8 @@ class Paystack:
         metadata: Optional[dict] = None
         ) -> dict[str, Any]:
         """Initialize a Paystack transaction"""
-        if reference is None:
-            reference = str(uuid.uuid4())
+        if not self.secret_key:
+            raise Exception("Paystack secret key not configured")
         
         payload = {
             "email": email,
@@ -63,7 +64,7 @@ class Paystack:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                settings.PAYSTACK_INITIALIZE_URL,
+                self.initialize_url,
                 json=payload,
                 headers=self.headers,
                 timeout=30.0,
@@ -104,7 +105,7 @@ class Paystack:
             raise Exception(f"Paystack error: {response.text}")
         
         
-    async def handle_charge_success(data: dict, db: Session):
+    async def handle_charge_success(self, data: dict, db: Session):
         """Handle Successful payment charge"""
         try:
             reference = data["data"]["reference"]
@@ -150,32 +151,5 @@ class Paystack:
             logger.error(f"Error handling charge.success: {str(e)}")
             raise
 
-    async def handle_charge_failed(data: dict, db: Session):
-        """Handle Failed payment charge"""
-        try:
-            reference = data["data"]["reference"]
-            logger.info(f"Processing failed charge for reference: {reference}")
-        
-            transaction = db.query(Transaction).filter(
-                Transaction.reference == reference
-            ).first()
-            
-            if not transaction:
-                logger.error(f"Transaction with reference {reference} not found")
-                raise HTTPException(
-                status_code=404,
-                detail="Transaction not found"
-            )
-                
-            transaction.status = TransactionStatus.FAILED
-            transaction.transaction_data = json.dumps(data["data"])
-        
-            db.commit()
-            logger.info(f"Transaction {reference} marked as failed")
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error handling charge.failed: {str(e)}")
-            raise
-
+    
 paystack = Paystack()

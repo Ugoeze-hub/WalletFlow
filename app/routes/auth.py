@@ -24,7 +24,7 @@ async def google_login(request: Request):
     
     return GoogleAuthURL(
         authorization_url=auth_url,
-        instructions="Open this URL in your browser, complete login, then copy the 'code' parameter from the redirect URL"
+        instructions="Open this URL in your browser to complete the auth process"
     )
 
 @router.get("/google/callback")

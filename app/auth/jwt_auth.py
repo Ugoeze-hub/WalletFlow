@@ -19,11 +19,13 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 api_key_scheme = APIKeyHeader(
     name="x-api-key", 
     auto_error=False,
+    scheme_name="API Key",
     description="API Key for service authentication. Format: sk_test_xxx or sk_live_xxx"
 )
 
 bearer_scheme = HTTPBearer(
     auto_error=False,
+    scheme_name="JWT Bearer Token",
     description="JWT token from Google OAuth. Format: Bearer eyJ0eXAiOiJKV1Qi..."
 )
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from decimal import Decimal
 from datetime import datetime
 from app.models.transactions import TransactionType, TransactionStatus
@@ -11,13 +11,26 @@ class WalletResponse(BaseModel):
         from_attributes = True
 
 class DepositRequest(BaseModel):
-    amount: Decimal
+    amount: Decimal = Field(
+        ...,
+        gt=0, 
+        description="Amount to deposit in Naira (minimum: 100 NGN)"
+    )
     
     @field_validator('amount')
-    def amount_must_be_positive(cls, v):
+    def validate_amount(cls, v):
+        if v < 100:
+            raise ValueError("Amount must be at least 100 NGN")
         if v <= 0:
-            raise ValueError('Amount must be greater than 0')
+            raise ValueError("Amount must be greater than 0")
         return v
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "amount": 5000.00
+            }
+        }
 
 class DepositResponse(BaseModel):
     reference: str
@@ -28,11 +41,26 @@ class TransferRequest(BaseModel):
     wallet_number: str
     amount: Decimal
     
+    amount: Decimal = Field(
+        ...,
+        gt=0,  # Must be greater than 0
+        description="Amount to deposit in Naira (minimum: 100 NGN)"
+    )
+    
     @field_validator('amount')
-    def amount_must_be_positive(cls, v):
+    def validate_amount(cls, v):
+        if v < 100:
+            raise ValueError("Amount must be at least 100 NGN")
         if v <= 0:
-            raise ValueError('Amount must be greater than 0')
+            raise ValueError("Amount must be greater than 0")
         return v
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "amount": 5000.00
+            }
+        }
 
 class TransferResponse(BaseModel):
     status: str

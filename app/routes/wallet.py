@@ -11,12 +11,10 @@ from app.schemas.wallet import (
     DepositStatusResponse, 
     DepositResponse, 
     DepositRequest,
-    WalletResponse, 
-    BalanceResponse, 
+    WalletResponse,  
     TransferRequest, 
     TransferResponse, 
-    TransactionResponse,
-    PaystackResponse
+    TransactionResponse
 )
     
 from app.services.paystack import paystack
@@ -45,15 +43,14 @@ async def deposit(
     
     reference = f"dep_{generate_id()}"
     
-    if deposit_data.amount <= 0:
+    if deposit_data.amount <= 100:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
     
     try:
         result = await paystack.initialize_transaction(
             email=db.query(User).filter(User.id == user_id).first().email,
             amount=deposit_data.amount,
-            reference=reference,
-            callback_url=str(request.url_for("paystack_webhook"))
+            reference=reference
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -88,17 +85,22 @@ async def paystack_webhook(
     """Handle Paystack webhook notifications"""
     
     body = await request.body()
-    signature = request.headers.get("x-paystack-signature")
     logger.info("Received Paystack webhook")
+    
+    logger.info(f"Headers: {dict(request.headers)}")
+    
+    signature = request.headers.get("x-paystack-signature")
     
     if not signature:
         logger.error("Missing 'x-paystack-signature' header!")
         for key, value in request.headers.items():
-            if "signature" in key.lower():
-                logger.info(f"Found signature-like header: {key} = {value[:20]}...")
+            logger.info(f"  {key}: {value}")
+        raise HTTPException(
+            status_code=401,
+            detail="Missing signature"
+        )
     
-    logger.info(f"Signature value: {signature[:50] if signature else 'None'}")
-
+    logger.info(f"Signature found: {signature[:20]}...")
     
     if not paystack.verify_paystack_signature(body, signature):
         logger.error("Invalid Paystack webhook signature")
@@ -120,9 +122,6 @@ async def paystack_webhook(
     
     if event == "charge.success":
         await paystack.handle_charge_success(data, db)
-    
-    elif event == "charge.failed":
-        await paystack.handle_charge_failed(data, db)
         
     else:
         logger.info(f"Unhandled event type: {event}")
@@ -207,6 +206,8 @@ async def transfer(
     if recipient_wallet.user_id == user_id:
         raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
     
+    reference = f"trn_{generate_id()}"
+    
     try:
         sender_wallet.balance -= transfer_data.amount
         
@@ -221,7 +222,7 @@ async def transfer(
             amount=transfer_data.amount,
             transaction_type=TransactionType.TRANSFER,
             status=TransactionStatus.SUCCESS,            
-            reference=str(uuid.uuid4()),
+            reference=reference,
             description=f"Transfer to {recipient_wallet.wallet_number}",
             transaction_data=json.dumps({
                 "recipient_wallet": transfer_data.wallet_number,
@@ -238,7 +239,7 @@ async def transfer(
             amount=transfer_data.amount,
             transaction_type=TransactionType.TRANSFER,
             status=TransactionStatus.SUCCESS,
-            reference=generate_id(),
+            reference=reference,
             description=f"Transfer from {sender_wallet.wallet_number}",
             transaction_data=json.dumps({
                 "sender_wallet": sender_wallet.wallet_number,
