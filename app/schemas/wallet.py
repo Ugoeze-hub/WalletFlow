@@ -1,14 +1,15 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.transactions import TransactionType, TransactionStatus
 
 class WalletResponse(BaseModel):
     wallet_number: str
     balance: Decimal
     
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
+
 
 class DepositRequest(BaseModel):
     amount: Decimal = Field(
@@ -25,12 +26,13 @@ class DepositRequest(BaseModel):
             raise ValueError("Amount must be greater than 0")
         return v
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "amount": 5000.00
             }
         }
+    )
 
 class DepositResponse(BaseModel):
     reference: str
@@ -55,13 +57,14 @@ class TransferRequest(BaseModel):
             raise ValueError("Amount must be greater than 0")
         return v
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "amount": 5000.00,
                 "wallet_number": "1234567890"
             }
         }
+    )
 
 class TransferResponse(BaseModel):
     status: str
@@ -86,5 +89,10 @@ class TransactionResponse(BaseModel):
     reference: str
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda dt: dt.isoformat() if dt.tzinfo else dt.replace(tzinfo=timezone.utc).isoformat(),
+            Decimal: lambda d: float(d)
+        }
+    )
