@@ -65,7 +65,7 @@ app.include_router(api_keys_router)
 async def root():
     return {"status": "ok", "message": "WalletFlow API"}
 
-@app.get("/kaithheathcheck") #did this because of leapcell requirements
+@app.get("/kaithheathcheck") #did this because of leapcell
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}

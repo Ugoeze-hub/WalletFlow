@@ -4,13 +4,23 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     
-class TokenData(BaseModel):
-    email: Optional[str] = None
-    user_id: Optional[int] = None
+class GoogleAuthURL(BaseModel):
+    """Response containing Google OAuth URL for manual testing"""
+    authorization_url: str
+    instructions: str
     
-class TokenResponse(Token):
-    user_id: str
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=...",
+                "instructions": "Open this URL in your browser, complete login, then copy the 'code' parameter from the redirect URL"
+            }
+        }
+        
+class UserResponse(BaseModel):
+    id: str
     email: str
-    name: Optional[str] = None
-    message: str = "Authentication successful"
+    name: str | None
     
+    class Config:
+        from_attributes = True

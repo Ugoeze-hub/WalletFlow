@@ -9,7 +9,6 @@ from app.database import get_db
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.api_key import APIKey
-from app.schemas.user import TokenData
 from app.auth.api_key_auth import hash_api_key
 import json
 import logging

@@ -45,6 +45,9 @@ async def deposit(
     
     reference = f"dep_{generate_id()}"
     
+    if deposit_data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+    
     try:
         result = await paystack.initialize_transaction(
             email=db.query(User).filter(User.id == user_id).first().email,

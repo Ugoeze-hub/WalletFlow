@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.auth.google_oauth import oauth
+from app.auth.google_oauth import oauth, generate_google_auth_url
 from app.auth.jwt_auth import create_access_token
 from app.models.user import User
 from app.models.wallet import Wallet
 import uuid
-from app.schemas.user import Token
+import httpx
+from app.schemas.user import Token, GoogleAuthURL
 from app.config import settings
+import urllib.parse
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,50 +18,54 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 @router.get("/google")
 async def google_login(request: Request):
-    redirect_uri = await oauth.google.authorize_redirect(
-        request, 
-        settings.GOOGLE_REDIRECT_URI
+    auth_url = generate_google_auth_url()
+    
+    logger.info(f"Generated Google OAuth URL")
+    
+    return GoogleAuthURL(
+        authorization_url=auth_url,
+        instructions="Open this URL in your browser, complete login, then copy the 'code' parameter from the redirect URL"
     )
-    return redirect_uri
 
 @router.get("/google/callback")
 async def google_callback(
-    request: Request, 
+    code: str = Query(..., description="Authorization code from Google (from the redirect URL after login)"), 
     db: Session = Depends(get_db)
 ):
-    
-    code = request.query_params.get("code")
-    error = request.query_params.get("error")
-    
-    logger.info(f"Google OAuth callback received with code: {code} and error: {error}")
-    
-    if error:
-        logger.error(f"Google OAuth error: {error}")
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Google authorization error"
-        )
-        
-    if not code:
-        logger.error("No code parameter found in the callback request")
-        raise HTTPException(
-            status_code=400, 
-            detail="Missing authorization code. Please start login again."
-        )
-    
     try:
-        logger.info("Exchanging code for token with Google")
         
-        token = await oauth.google.authorize_access_token(request)
+        code = urllib.parse.unquote(code)
+        logger.info(f"Received code decoded: {code}")
+        logger.info(f"Using redirect_uri: {settings.GOOGLE_REDIRECT_URI}")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            token_response = await client.post(
+                'https://oauth2.googleapis.com/token',
+                params={
+                    'code': code,
+                    'client_id': settings.GOOGLE_CLIENT_ID,
+                    'client_secret': settings.GOOGLE_CLIENT_SECRET,
+                    'redirect_uri': settings.GOOGLE_REDIRECT_URI,
+                    'grant_type': 'authorization_code'
+                }
+            )
         
-        user_info = token.get('userinfo')
+        if token_response.status_code != 200:
+            error_detail = token_response.json().get('error_description', 'Token exchange failed')
+            raise HTTPException(status_code=400, detail=error_detail)
         
-        if not user_info:
-            raise HTTPException(
-                status_code=400, 
-                detail="Failed to get user info from Google")
+        token_data = token_response.json()
+        logger.info(f"Token data received from Google")
         
-        logger.info(f"User info retrieved from Google: {user_info.get('email')}")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            userinfo_response = await client.get(
+                'https://www.googleapis.com/oauth2/v3/userinfo',
+                headers={'Authorization': f"Bearer {token_data['access_token']}"}
+            )
+        
+        if userinfo_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to get user info")
+        
+        user_info = userinfo_response.json()
         
         google_id = user_info['sub']
         email = user_info['email']
