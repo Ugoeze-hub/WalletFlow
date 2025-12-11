@@ -1,7 +1,6 @@
-from sqlalchemy import Column, String, DateTime, Float, Text, Enum, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Float, Text, Enum, ForeignKey, func
+from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 import uuid
-from datetime import datetime, timezone
 import enum
 from app.database import Base
 from sqlalchemy.orm import relationship
@@ -31,8 +30,8 @@ class Transaction(Base):
     description = Column(Text)
     reference = Column(String, unique=True, index=True, nullable=False)
     transaction_data = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
     
     user = relationship("User", back_populates="transactions")
     wallet = relationship("Wallet", back_populates="primary_transactions", foreign_keys=[wallet_id])

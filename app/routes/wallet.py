@@ -74,7 +74,7 @@ async def deposit(
     return DepositResponse(
         reference=reference,
         authorization_url=result["authorization_url"],
-        message=f"Deposit of {transaction.amount} successfull"
+        message=f"Deposit of {transaction.amount} pending"
     )
 
 @router.post("/paystack/webhook")
@@ -206,12 +206,15 @@ async def transfer(
     if recipient_wallet.user_id == user_id:
         raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
     
-    reference = f"trn_{generate_id()}"
+    sender_reference = f"trn_out_{generate_id()}"
+    recipient_reference = f"trn_in_{generate_id()}"
+    
+    amount = float(transfer_data.amount)
     
     try:
-        sender_wallet.balance -= transfer_data.amount
+        sender_wallet.balance -= amount
         
-        recipient_wallet.balance += transfer_data.amount
+        recipient_wallet.balance += amount
         user = db.query(User).filter(User.id == user_id).first()
         
         sender_transaction = Transaction(
@@ -222,7 +225,7 @@ async def transfer(
             amount=transfer_data.amount,
             transaction_type=TransactionType.TRANSFER,
             status=TransactionStatus.SUCCESS,            
-            reference=reference,
+            reference=sender_reference,
             description=f"Transfer to {recipient_wallet.wallet_number}",
             transaction_data=json.dumps({
                 "recipient_wallet": transfer_data.wallet_number,
@@ -239,7 +242,7 @@ async def transfer(
             amount=transfer_data.amount,
             transaction_type=TransactionType.TRANSFER,
             status=TransactionStatus.SUCCESS,
-            reference=reference,
+            reference=recipient_reference,
             description=f"Transfer from {sender_wallet.wallet_number}",
             transaction_data=json.dumps({
                 "sender_wallet": sender_wallet.wallet_number,

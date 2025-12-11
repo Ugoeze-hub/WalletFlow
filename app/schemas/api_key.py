@@ -11,7 +11,9 @@ class APIKeyCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "name": "key_name",
-                "permissions": "deposit",
+                "permissions": [
+                    "deposit"
+                ],
                 "expiry": "1M"
             }
         }
@@ -24,7 +26,7 @@ class APIKeyResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
         json_encoders={
-            datetime: lambda dt: dt.isoformat() if dt.tzinfo else dt.replace(tzinfo=timezone.utc).isoformat(),
+            datetime: lambda dt: dt.astimezone(timezone.utc).isoformat(),
         }
     )
 

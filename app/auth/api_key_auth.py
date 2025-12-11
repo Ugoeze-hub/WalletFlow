@@ -70,16 +70,38 @@ def create_api_key(
         "api_key": key,
         "expires_at": expires_at
     }
+    
+def revoke_api_key(db: Session, user_id: str, api_key_string: str) -> bool:
+    """Revoke (deactivate) an API key"""
+    
+    hashed_key = hash_api_key(api_key_string)
+    
+    api_key = db.query(APIKey).filter(
+        APIKey.key == hashed_key,
+        APIKey.user_id == user_id,
+        APIKey.is_active == True
+    ).first()
+    
+    if not api_key:
+        return False
+    
+    api_key.is_active = False
+    db.commit()
+    return True
+
 
 def rollover_api_key(
     db: Session,
-    user_id: int,
+    user_id: str,
     expired_key_id: str,
     expiry_str: str
 ) -> Dict:
     """Rollover an expired API key"""
+    
+    hashed_key = hash_api_key(expired_key_id)
+    
     expired_key = db.query(APIKey).filter(
-        APIKey.id == expired_key_id,
+        APIKey.key == hashed_key,
         APIKey.user_id == user_id,
         APIKey.expires_at <= datetime.now(timezone.utc)
     ).first()
@@ -87,7 +109,13 @@ def rollover_api_key(
     if not expired_key:
         raise Exception("Expired key not found or still active")
     
-    permissions = json.loads(expired_key.permissions)
+    if not expired_key.is_active:
+        raise Exception("Cannot rollover inactive/revoked key")
+    
+    try:
+        permissions = json.loads(expired_key.permissions)
+    except:
+        permissions = ["read"]
     
     new_key_data = create_api_key(
         db=db,
@@ -98,3 +126,28 @@ def rollover_api_key(
     )
     
     return new_key_data
+
+
+def list_user_api_keys(db: Session, user_id: str) -> list:
+    """List all API keys for a user"""
+    keys = db.query(APIKey).filter(
+        APIKey.user_id == user_id
+    ).order_by(APIKey.created_at.desc()).all()
+    
+    result = []
+    for key in keys:
+        try:
+            permissions = json.loads(key.permissions)
+        except:
+            permissions = []
+        
+        result.append({
+            "id": key.id,
+            "name": key.name,
+            "created_at": key.created_at.isoformat() if key.created_at else None,
+            "expires_at": key.expires_at.isoformat() if key.expires_at else None,
+            "is_active": key.is_active,
+            "permissions": permissions
+        })
+    
+    return result

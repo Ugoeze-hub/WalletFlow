@@ -45,7 +45,7 @@ class TransferRequest(BaseModel):
     
     amount: Decimal = Field(
         ...,
-        gt=0,  # Must be greater than 0
+        gt=0,  
         description="Amount to deposit in Naira (minimum: 100 NGN)"
     )
     
@@ -92,7 +92,7 @@ class TransactionResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
         json_encoders={
-            datetime: lambda dt: dt.isoformat() if dt.tzinfo else dt.replace(tzinfo=timezone.utc).isoformat(),
+            datetime: lambda dt: dt.astimezone(timezone.utc).isoformat(),
             Decimal: lambda d: float(d)
         }
     )
